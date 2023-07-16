@@ -1,0 +1,132 @@
+# Need to point to the correct paths
+train_path: ???
+benchmark_path: data/benchmark
+
+
+
+max_description_seq_len: 500
+
+
+### Checkpointing
+checkpointing: True  
+number_of_test: 20
+name: results
+####
+
+### Test (Not influence the training)
+model_path: run/False/2022-11-07/13-46-03/Exp_weights/1000000_log_-epoch=104-val_loss=0.00.ckpt
+### 
+
+
+# Training parameters
+num_of_workers: 0
+check_val_every_n_epoch: 5 # Number of epochs between each benchmarking
+batch_size: 400
+num_sanity_val_steps: 0 # Number of sanity validation steps
+epochs: 10000
+precision: 16
+gpu: 1 # Number of the gpu to use 
+resume_from_checkpoint: ""
+is_debug: False # Should be always False, used for checking the code.
+
+
+
+path_to_candidate: configs/equations_ops_3_5000.json # This is the file that contains the negative equations from which the model will sample the absent branches
+
+dataset:
+  epoch_len: 1000000 # Number of equations per epoch
+  total_variables: #Do not fill
+  total_coefficients: #Do not fill
+  max_number_of_points: 1000 
+  type_of_sampling_points: uniform
+  fun_support:
+    max: 10
+    min: -10
+    min_len: 1
+  constants:
+    enabled: True
+    num_constants: 6
+    additive:
+      max: 10
+      min: -10
+    multiplicative:
+      max: 10
+      min: 0.05
+  number_of_complexity_classes: 30 # Hard coded in the code at the moment 1405:config.py
+  conditioning: 
+    mode: True # True -> Conditionings will be generated in the __getitem__ method and passed to the model
+                # False -> Conditionings will not generated neither passed to the model. 
+                # Note that this option has to be consistent with the architecture.conditioning option
+    name: "train" # Or it is filled from the validation
+    prob_symmetry: 0.2
+    prob_complexity: 0.3
+    positive:
+      prob: 0.3
+      min_percent: 0
+      max_percent: 1
+      prob_pointers: 0.15 # Probability of replacing a number with a pointer
+    negative:
+      prob: 0.3
+      min_percent: 0
+      max_percent: 1      
+      k: 4
+      sampling_type: squared
+
+
+
+architecture:
+  sinuisodal_embeddings: False
+  dec_pf_dim: 512
+  dec_layers: 5
+  dim_hidden: 512 #512
+  lr: 0.0001
+  dropout: 0
+  cond_num_layers: 3
+  num_features: 32
+  ln: True
+  N_p: 0
+  num_inds: 100
+  activation: "relu"
+  bit16: True
+  norm: True
+  linear: False
+  input_normalization: False
+  src_pad_idx: 0
+  trg_pad_idx: 0
+  length_eq: 60
+  n_l_enc: 5
+  mean: 0.5  
+  std: 0.5 
+  dim_input: 6
+  num_heads: 8
+  number_possible_tokens: 80
+  num_tokens_condition: 150 # Conditional encoder
+  embedding_dim_condition: 512
+  conditioning: True
+  concat: True
+  predict_constants: c # Can be False or "c"
+  wupsteps: 4000
+
+inference:
+  beam_size: 10 # Used in validation
+  word2id: ?? # During training is overwritten
+  id2word: ?? # During training is overwritten
+  total_variables: ?? # Variable used in the inference
+  n_jobs: 1
+  bfgs:
+    activated: False
+    not_activated_no_fit: True
+    n_restarts: 10
+    add_coefficients_if_not_existing: False
+    normalization_o: False
+    idx_remove: True
+    normalization_type: MSE
+    stop_time: 1e9
+  
+
+# @package _group_
+hydra:
+  run:
+    dir: run/${architecture.predict_constants}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+      dir: runs/${architecture.predict_constants}/${now:%Y-%m-%d}/${now:%H-%M-%S}

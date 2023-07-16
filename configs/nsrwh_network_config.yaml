@@ -1,0 +1,103 @@
+train_path: /scratch/tbe/nesymres/raw_datasets/200000000
+val_path: data/validation
+raw_test_path: ???
+max_description_seq_len: 500
+checkpointing: true
+number_of_test: 20
+val_check_interval: 5
+name: results
+benchmark_path: test_set/nc.csv
+model_path: run/False/2022-11-07/13-46-03/Exp_weights/1000000_log_-epoch=104-val_loss=0.00.ckpt
+test_path: data/validation/nc
+resume_from_checkpoint: ''
+wandb: false
+num_of_workers: 4
+batch_size: 400
+num_sanity_val_steps: 0
+epochs: 10000
+precision: 16
+gpu: 3
+path_to_candidate: configs/equations_ops_3_5000.json
+dataset:
+  len: 1000000
+  total_variables: null
+  total_coefficients: null
+  max_number_of_points: 1000
+  type_of_sampling_points: uniform
+  noise: false
+  fun_support:
+    max: 10
+    min: -10
+    min_len: 1
+  constants:
+    enabled: true
+    num_constants: 6
+    additive:
+      max: 10
+      min: -10
+    multiplicative:
+      max: 10
+      min: 0.05
+  number_of_complexity_classes: 30
+  conditioning:
+    mode: true
+    name: train
+    prob_symmetry: 0.2
+    prob_complexity: 0.3
+    prob_noise: 0
+    positive:
+      prob: 0.3
+      min_percent: 0
+      max_percent: 1
+      prob_pointers: 0.15
+    negative:
+      prob: 0.3
+      min_percent: 0
+      max_percent: 1
+architecture:
+  sinuisodal_embeddings: false
+  dec_pf_dim: 512
+  dec_layers: 5
+  dim_hidden: 512
+  lr: 0.0001
+  dropout: 0
+  cond_num_layers: 3
+  num_features: 32
+  ln: true
+  N_p: 0
+  num_inds: 100
+  activation: relu
+  bit16: true
+  norm: true
+  linear: false
+  input_normalization: false
+  src_pad_idx: 0
+  trg_pad_idx: 0
+  length_eq: 60
+  n_l_enc: 5
+  mean: 0.5
+  std: 0.5
+  dim_input: 6
+  num_heads: 8
+  number_possible_tokens: 80
+  num_tokens_condition: 150
+  embedding_dim_condition: 512
+  conditioning: v3
+  concat: true
+  predict_constants: c
+  wupsteps: 4000
+inference:
+  beam_size: 10
+  word2id: ??
+  id2word: ??
+  total_variables: ??
+  n_jobs: 1
+  bfgs:
+    activated: false
+    not_activated_no_fit: true
+    n_restarts: 10
+    add_coefficients_if_not_existing: false
+    normalization_o: false
+    idx_remove: true
+    normalization_type: MSE
+    stop_time: 1000000000.0
