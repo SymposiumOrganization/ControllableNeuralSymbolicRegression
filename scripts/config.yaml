@@ -99,7 +99,7 @@ architecture:
   std: 0.5 
   dim_input: 6
   num_heads: 8
-  number_possible_tokens: 80
+  number_possible_tokens: 90
   num_tokens_condition: 150 # Conditional encoder
   embedding_dim_condition: 512
   conditioning: True
