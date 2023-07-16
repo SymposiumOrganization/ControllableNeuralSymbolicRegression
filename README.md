@@ -36,11 +36,11 @@ cd model/
 Please check the requirements file if you encounter trouble with some other dependencies.
 
 ## Interactive Demo
-Download the weights from HuggingFace and place them in the model folder:
+1. Download the weights from HuggingFace:
+```
 git clone   https://huggingface.co/TommasoBendinelli/ControllableNeuralSymbolicRegressionWeights 
-
-
-Run the interactive demo using the demo module:
+```
+2. Run the interactive demo using the demo module:
 ```
 streamlit run visualization/demo.py
 ```
