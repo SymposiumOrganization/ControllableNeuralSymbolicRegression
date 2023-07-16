@@ -37,3 +37,4 @@ pmlb/
 target_folder/
 ControllableNeuralSymbolicRegressionWeights/*
 ControllableNeuralSymbolicRegressionWeights*
+bash_scripts/*
