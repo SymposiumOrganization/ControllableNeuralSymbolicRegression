@@ -8,10 +8,10 @@ Neural Symbolic Regression with Hypotheses (NSRwH) is a novel neural symbolic re
 ## Getting Started
 
 ### Prerequisites
-* Python 3.9 or later
-* Ubuntu (20.04), although other Linux distributions and Windows should work as well
-* PyTorch 1.12, not tested with other versions
-* Pytorch Lightning 1.9.5, not tested with other versions.
+* Tested on Python 3.9.5 
+* Tested on Ubuntu 20.04
+* Tested on PyTorch 1.12 
+* Tested on Pytorch Lightning 1.9.5 (Does not work out of the box with Python Lightning >= 2.0.0)
 ### Installation
 Clone the repository:
 ``` 
