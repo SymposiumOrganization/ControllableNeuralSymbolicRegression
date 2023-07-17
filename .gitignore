@@ -12,7 +12,6 @@ run/*
 old/*
 weights/*
 outputs/*
-requirements.txt
 22-53-32/
 no_test/*
 .env

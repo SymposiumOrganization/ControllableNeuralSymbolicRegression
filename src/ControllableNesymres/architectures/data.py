@@ -992,41 +992,13 @@ class ControllableNesymresDataset(data.Dataset):
         while cnt < self.MAX_ATTEMPTS:
             support_limits = return_support_limits(self.cfg, self.metadata, support=eq.support)
             support = sample_support(support_limits, variables_str, self.cfg.dataset.max_number_of_points*5, self.total_variables, self.cfg)
-            half_support_used = {}
-            for key,value in support.items():
-                if key in variables_str:
-                    half_support_used[key] = value.half()
-            # Create a tensor with the support
-            support_tensor = []
-            for support_row in support.values():
-                support_tensor.append(np.array(support_row))
-
-            support_tensor = torch.tensor(np.array(support_tensor)).float()
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                try:
-                    aaaa = f(**half_support_used)
-                    if  type(aaaa) == torch.Tensor and aaaa.dtype == torch.float16:
-                        if torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM)).sum() > self.cfg.dataset.max_number_of_points:
-                            
-                            data_points = torch.cat([support_tensor, torch.unsqueeze(aaaa, axis=0)], axis=0).unsqueeze(0)
-                    
-                            # Drop datapoints that have a nan value in the last row (i.e. the y)
-                            data_points = data_points[:, :, ~torch.isnan(data_points[0, -1, :])]
-                            
-                            # Drop datapoints that have a value in the last row (i.e. the y) that is too large
-                            data_points = data_points[:, :, torch.abs(data_points[0, -1, :]) < MAX_NUM]
-                            
-                            data_points = data_points.float()
-                            assert data_points.shape[2] > self.cfg.dataset.max_number_of_points, "Something went wrong in the datapoint generation"
-                            break
-                except NameError as e:
-                    print(e)
-                except RuntimeError as e:
-                    print(e)
-
-                cnt += 1
-
+            is_valid, data_points = sample_images(f, support, variables_str, self.cfg)
+            if is_valid:
+                break
+            cnt += 1
+            
+      
+            
         if cnt >= self.MAX_ATTEMPTS:
             return Equation(info_eq=curr.info_eq, code=None,expr=eq_sympy_infix_with_constants,coeff_dict=consts,variables=curr.variables,support=curr.support, valid=False)
         
@@ -1039,6 +1011,42 @@ class ControllableNesymresDataset(data.Dataset):
         
     def __len__(self):
         return self.len
+
+def sample_images(lambdify_f, support, variables_str, cfg):
+    half_support_used = {}
+    for key,value in support.items():
+        if key in variables_str:
+            half_support_used[key] = value.half()
+    # Create a tensor with the support
+    support_tensor = []
+    for support_row in support.values():
+        support_tensor.append(np.array(support_row))
+
+    support_tensor = torch.tensor(np.array(support_tensor)).float()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            aaaa = lambdify_f(**half_support_used)
+            if  type(aaaa) == torch.Tensor and aaaa.dtype == torch.float16:
+                if torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM)).sum() > cfg.dataset.max_number_of_points:
+                    
+                    data_points = torch.cat([support_tensor, torch.unsqueeze(aaaa, axis=0)], axis=0).unsqueeze(0)
+            
+                    # Drop datapoints that have a nan value in the last row (i.e. the y)
+                    data_points = data_points[:, :, ~torch.isnan(data_points[0, -1, :])]
+                    
+                    # Drop datapoints that have a value in the last row (i.e. the y) that is too large
+                    data_points = data_points[:, :, torch.abs(data_points[0, -1, :]) < MAX_NUM]
+                    
+                    data_points = data_points.float()
+                    assert data_points.shape[2] > cfg.dataset.max_number_of_points, "Something went wrong in the datapoint generation"
+                    return True, data_points
+        except NameError as e:
+            print(e)
+        except RuntimeError as e:
+            print(e)
+
+        return False, None
 
 
 def custom_collate_fn(eqs: List[Equation],  total_variables, total_coefficients, cfg) -> List[torch.tensor]:
@@ -1172,7 +1180,7 @@ def compute_properties(expr: str, compute_symmetry=False, metadata=None, cfg=Non
     return res
  
 
-def get_robust_random_data(eq, variables):
+def get_robust_random_data(eq, variables, cfg=None):
     #MAX_NUM = 10_000
     MAX_NUM = 65504
     n_attempts_max = 10
@@ -1183,15 +1191,18 @@ def get_robust_random_data(eq, variables):
     syms = torch.tensor([])
     aaaas = torch.tensor([])
     while cnt < n_attempts_max:
-        distribution =  torch.distributions.Uniform(-25,25) #torch.Uniform.distribution_support(cfg.fun_support[0],cfg.fun_support[1])
+        if cfg is not None:
+            distribution =  torch.distributions.Uniform(cfg.dataset.fun_support.min,cfg.dataset.fun_support.max)
+        else:
+            distribution =  torch.distributions.Uniform(-25,25) #torch.Uniform.distribution_support(cfg.fun_support[0],cfg.fun_support[1])
         sym = []
         for sy in variables:
             curr = distribution.sample([int(pts*5000)])
             sym.append(curr)
-        try:
-            sym = torch.stack(sym)
-        except:
-            breakpoint()
+        #try:
+        sym = torch.stack(sym)
+        # except:
+        #     breakpoint()
         input_lambdi = sym
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -1213,19 +1224,20 @@ def get_robust_random_data(eq, variables):
             #     aaaa = torch.cat([aaaas,aaaa],dim=0)
 
             if  type(aaaa) == torch.Tensor:
-                if torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM)).sum() > pts:
-                    return sym.T, aaaa
-                else:
-                    # Keep good points so far
-                    syms = sym[:,torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM))]
-                    aaaas = aaaa[torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM))]
+                # Keep good points so far
+                syms = sym[:,torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM))]
+                aaaas = aaaa[torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM))]
+                if len(aaaas) > pts:
+                    return syms.T, aaaas
+                # else:
+                #     # Keep good points so far
+                #     syms = sym[:,torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM))]
+                #     aaaas = aaaa[torch.bitwise_and(~torch.isnan(aaaa),~(torch.abs(aaaa) >= MAX_NUM))]
                     
 
 
-            breakpoint()
             cnt += 1
-    else:
-        breakpoint()
+    raise ValueError("Cannot find good points to sample")
 
 def tokenize(prefix_expr:list, word2id:dict) -> list:
     tokenized_expr = []

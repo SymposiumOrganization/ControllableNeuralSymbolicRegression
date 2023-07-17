@@ -8,7 +8,7 @@ import pandas as pd
 from ControllableNesymres.architectures.data import compute_properties, create_negatives,\
                                                     prepare_negative_pool, sympify_equation,\
                                                     return_costants, description2tokens, prepare_pointers,\
-                                                    tokenize, is_token_constant
+                                                    tokenize, is_token_constant, get_robust_random_data, return_support_limits,sample_support,sample_images
 import base64
 import streamlit as st
 from ControllableNesymres.dataset.generator import Generator
@@ -93,7 +93,7 @@ def main():
     st.markdown("### Setup")
     st.markdown("\n Please fill the following fields with the path to the NSRwH and NSR models. Instruction on how to get or \
                 train these models can be found in the README.md file")
-    nsrwh = st.text_input("Path to the NSRwH model", "ControllableNeuralSymbolicRegressionWeights /nsrwh_200000000_epoch=149.ckpt")
+    nsrwh = st.text_input("Path to the NSRwH model", "ControllableNeuralSymbolicRegressionWeights/nsrwh_200000000_epoch=149.ckpt")
     
     metadata = load_metadata_hdf5(Path("configs"))
     # Retrofit word2id if there is conditioning
@@ -108,6 +108,8 @@ def main():
     cfg.inference.bfgs.activated = True
     cfg.inference.bfgs.n_restarts=10
     cfg.inference.n_jobs=-1
+    cfg.dataset.fun_support.max =5
+    cfg.dataset.fun_support.min = -5
     cfg.inference.beam_size = beam_size
 
     metadata = retrofit_word2id(metadata, cfg)
@@ -115,10 +117,17 @@ def main():
     is_cuda = st.checkbox("Tick this if you want to load the models into the GPU", True)
     
 
+    do_inference_with_also_nsr = st.checkbox("Tick this if you want to also run the NSR model", True)
+    if do_inference_with_also_nsr:
+        nsr = st.text_input("Path to the NSR model", "ControllableNeuralSymbolicRegressionWeights/nsr_200000000_epoch=149.ckpt")
+    else:
+        nsr = None
+
+
     negative_pool =  prepare_negative_pool(cfg) 
 
     st.markdown("### Define the equation to test") 
-    equation_examples = ["0.01*x_1**2+x_2+exp(x_3+x_4)", "sin(x_1)+sqrt(x_2)+sin(x_3/2+x_4)", "x_1**(1/2)+0.3*x_2**2+x_3**2", "exp(0.043*sin(x_1*x_2))+x_3+3*x_4", "0.2*x_1**2+x_2**2+(x_3*x_4**2)", "other"]
+    equation_examples = ["0.01*x_1+x_2+exp(x_3)", "sin(x_1)+sqrt(x_2)+sin(x_3+x_4)", "0.5*x_1**(1/2)+x_2**2 + x_3**2", "exp(0.043*sin(x_1*x_2))+x_3", "x_1**2+log(x_3+x_2)", "other"]
     eq_string = st.selectbox("Select an equation or select on 'other' to write your own equation to test", equation_examples, index=4)
 
     if eq_string == "other":
@@ -132,18 +141,42 @@ def main():
     variables = sorted([str(x) for x in tmp])
     f = sympy.lambdify(variables, eq_sympy_infix_with_constants)
 
-    number_of_points = st.number_input("Select the number of points that you would like to be sampled", 10, 1000, 100)
+    number_of_points = st.number_input("Select the number of points that you would like to be sampled", 10, 1000, 200)
     noise_applied = st.number_input("Select the amount of noise to be applied to the Y", 0.0, 1.0, 0.0)
 
-    # Sample the points
-    X = np.random.uniform(-10, 10, (number_of_points, len(variables)))
-    X_dict = {}
-    for idx, var in enumerate(variables):
-        X_dict[var] = torch.tensor(X[:,idx:idx+1]).half()
+    # # Sample the points
+    # X = np.random.uniform(-10, 10, (number_of_points, len(variables)))
+    # X_dict = {}
+    # for idx, var in enumerate(variables):
+    #     X_dict[var] = torch.tensor(X[:,idx:idx+1]).half()
 
-    y = f(**X_dict).T + np.random.normal(0, noise_applied, number_of_points)
-    y = y.squeeze()
+    # y = f(**X_dict).T + np.random.normal(0, noise_applied, number_of_points)
+    # y = y.squeeze()
+    cnt = 0
+    MAX_ATTEMPTS = 5
+    while cnt < MAX_ATTEMPTS:
+        support_limits = return_support_limits(cfg, metadata, support=None)
+        support = sample_support(support_limits, variables, cfg.dataset.max_number_of_points*5,  metadata.total_variables, cfg)
+        is_valid, data_points = sample_images(f, support, variables, cfg)
+        if is_valid:
+            break
+        cnt += 1
+    if not is_valid:
+        raise ValueError("Could not find a valid support")
     
+    # Shuffle the datapoints along the points dimension
+    data_points = data_points[:, :, torch.randperm(data_points.shape[2])]
+    data_points = data_points[:, :, :number_of_points]
+    X = data_points[0,:5,:].T
+    y = data_points[0,5,:]
+    
+    # X, y = get_robust_random_data(eq_string, variables, cfg)
+    # pts = torch.arange(number_of_points)
+    # pts = torch.randperm(len(pts))
+    
+    
+   
+
     if is_cuda:
         X = torch.tensor(X).cuda()
         y = torch.tensor(y).cuda()
@@ -160,7 +193,7 @@ def main():
             """
             )
             
-    conditioning_to_give = st.multiselect("Select conditionings:", ["Complexity", "Symmetry", "Appearing branches", "Absent branches"], [])
+    conditioning_to_give = st.multiselect("Select conditionings:", ["Complexity", "Symmetry", "Appearing branches", "Absent branches"], ["Appearing branches"])
     pointer_words = None
     description = {"positive_prefix_examples": [], "negative_prefix_examples": []}
     if "Complexity" in conditioning_to_give:
@@ -180,7 +213,7 @@ def main():
     if "Appearing branches" in conditioning_to_give:
         st.markdown("###### Appearing branches")
         gt_appearing_branches = properties["all_positives_examples"]
-        appearing_branches = st.multiselect("Select which appearing branches to pass (Max 2)", gt_appearing_branches, gt_appearing_branches[0:2])
+        appearing_branches = st.multiselect("Select which appearing branches to pass (Max 2)", gt_appearing_branches, gt_appearing_branches[2:3]+ gt_appearing_branches[10:11])
         assert len(appearing_branches) <= 2, "You can only select up to 2 appearing branches"
         # for branch in appearing_branches:
         #     mix_ptr_constants(branch, cfg)
@@ -234,18 +267,22 @@ def main():
 
     # Prepare the conditioning
     cond_tokens, cond_str_tokens = description2tokens(description, metadata.word2id , cfg)
-    cond_tokens = torch.tensor(cond_tokens).long().cuda()
+
+    if is_cuda:
+        cond_tokens = torch.tensor(cond_tokens).long().cuda()
+    else:
+        cond_tokens = torch.tensor(cond_tokens).long()
+
     if pointer_words is not None:
         numberical_conditioning = [float(description["cost_to_pointer"][key]) for key in pointer_words if key in description["cost_to_pointer"]]
     else:
         numberical_conditioning = []
-    conditioning = {"symbolic_conditioning": cond_tokens, "numerical_conditioning": torch.tensor(numberical_conditioning,device="cuda").float()}
-    #conditioning = {"symbolic_conditioning": torch.tensor([1,2],device="cuda").long(), "numerical_conditioning": torch.tensor([],device="cuda").float()}
 
-    st.markdown("#### NSR")
-    do_inference_with_also_nsr = st.checkbox("Tick this if you want to also run the NSR model", True)
-    if do_inference_with_also_nsr:
-        nsr = st.text_input("Path to the NSR model", "ControllableNeuralSymbolicRegressionWeights/nsr_200000000_epoch=149.ckpt")
+    if is_cuda:
+        conditioning = {"symbolic_conditioning": cond_tokens, "numerical_conditioning": torch.tensor(numberical_conditioning,device="cuda").float()}
+    else:
+        conditioning = {"symbolic_conditioning": cond_tokens, "numerical_conditioning": torch.tensor(numberical_conditioning,device="cpu").float()}
+    #conditioning = {"symbolic_conditioning": torch.tensor([1,2],device="cuda").long(), "numerical_conditioning": torch.tensor([],device="cuda").float()}
 
     fit = st.button("Run the model")
     if fit:
@@ -273,8 +310,7 @@ def main():
             st.latex(f"\\text{{Prediction {idx+1}: }} {sympy.latex(pred)}")
 
 
-        
-        if do_inference_with_also_nsr:
+        if nsr is not None:
             cfg_nsr =  omegaconf.OmegaConf.load(Path("configs/nsr_network_config.yaml"))
             cfg_nsr.inference.bfgs.activated = True
             cfg_nsr.inference.bfgs.n_restarts=10
