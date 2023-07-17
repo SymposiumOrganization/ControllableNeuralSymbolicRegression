@@ -36,6 +36,10 @@ cd model/
 Please check the requirements file if you encounter trouble with some other dependencies.
 
 ## Interactive Demo
+### Hosted on HuggingFace
+Try it out here: https://huggingface.co/spaces/TommasoBendinelli/ControllableNeuralSymbolicRegression
+
+### Hosted locally
 1. Download the weights from HuggingFace:
 ```
 git clone   https://huggingface.co/TommasoBendinelli/ControllableNeuralSymbolicRegressionWeights 
