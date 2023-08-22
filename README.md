@@ -112,9 +112,6 @@ python scripts/train.py  train_path=target_folder/datasets/2000000 benchmark_pat
 
 Note that by default the model will test on the benchmark dataset every check_val_every_n_epoch epochs. Please note that if you have not created the benchmark dataset, you will neet to avoid validation by setting check_val_every_n_epoch to a very large number (e.g., 1000000) and saving the model according to the steps.
 
-## Experiment Results
-TODO
-
 ## Citation
 
 If you use this code or our results in your research, please cite the following paper:
