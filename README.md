@@ -15,7 +15,7 @@ Neural Symbolic Regression with Hypotheses (NSRwH) is a novel neural symbolic re
 ### Installation
 Clone the repository:
 ``` 
-git clone https://github.com/controllable-neural-symbolic-regression.git
+git clone https://github.com/SymposiumOrganization/ControllableNeuralSymbolicRegression.git
 ```
 Create and source the virtual environment:
 ```
